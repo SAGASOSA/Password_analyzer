@@ -1,18 +1,36 @@
 import streamlit as st
 import json
 import random
+import os
+
 from email_utils import send_otp_email
 from utils import validate_password
 from training.predict import predict_password
-from training.predict import predict_password
-from utils import validate_password
-def generate_otp():
-    return str(random.randint(100000, 999999))
+
+# ======================
+# PATH FIX (VERY IMPORTANT)
+# ======================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+users_file = os.path.join(BASE_DIR, "users.json")
+
 # ======================
 # LOAD DATA
 # ======================
-with open("users.json") as f:
+with open(users_file, "r") as f:
     data = json.load(f)
+
+# ======================
+# SAVE FUNCTION
+# ======================
+def save_data():
+    with open(users_file, "w") as f:
+        json.dump(data, f, indent=4)
+
+# ======================
+# OTP GENERATOR
+# ======================
+def generate_otp():
+    return str(random.randint(100000, 999999))
 
 # ======================
 # SESSION STATE
@@ -29,41 +47,36 @@ if "logged_in" not in st.session_state:
 def login_page():
     st.title("🔐 Login System")
 
-    col1, col2 = st.columns([3, 1])
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    col1, col2, col3 = st.columns(3)
 
     with col1:
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if username in data["users"] and data["users"][username]["password"] == password:
+                st.session_state.logged_in = True
+                st.session_state.role = "user"
+                st.session_state.username = username
 
-        # 👇 Buttons in same row
-        btn1, btn2, btn3 = st.columns(3)
+            elif username in data["admin"] and data["admin"][username]["password"] == password:
+                st.session_state.logged_in = True
+                st.session_state.role = "admin"
+                st.session_state.username = username
+            else:
+                st.error("Invalid credentials")
 
+    with col2:
+        if st.button("Forgot Password"):
+            st.session_state.page = "forgot"
 
-        with btn1:
-            if st.button("Login"):
-                if username in data["users"] and data["users"][username]["password"] == password:
-                    st.session_state.logged_in = True
-                    st.session_state.role = "user"
-                    st.session_state.username = username
-                elif username in data["admin"] and data["admin"][username]["password"] == password:
-                    st.session_state.logged_in = True
-                    st.session_state.role = "admin"
-                    st.session_state.username = username
-                else:
-                    st.error("Invalid credentials")
+    with col3:
+        if st.button("Create Account"):
+            st.session_state.page = "signup"
 
-        with btn2:
-            if st.button("Forgot Password"):
-                st.session_state.page = "forgot"
-
-        with btn3:
-            if st.button("Create Account"):
-                st.session_state.page = "signup"
 # ======================
 # FORGOT PASSWORD
 # ======================
-from email_utils import send_otp_email
-
 def forgot_page():
     st.title("🔁 Forgot Password (OTP)")
 
@@ -81,7 +94,6 @@ def forgot_page():
                 st.success("OTP sent to your email")
             else:
                 st.error("Failed to send email")
-
         else:
             st.error("User not found")
 
@@ -103,31 +115,26 @@ def forgot_page():
             if valid == "Valid":
                 user = st.session_state.reset_user
                 data["users"][user]["password"] = new_pass
-
-                with open("users.json", "w") as f:
-                    json.dump(data, f)
-
+                save_data()
                 st.success("Password updated successfully")
             else:
                 st.error(valid)
 
     if st.button("Back"):
         st.session_state.page = "login"
+
 # ======================
 # USER DASHBOARD
 # ======================
 def user_dashboard():
     st.title("👤 User Dashboard")
-
     st.write(f"Welcome, {st.session_state.username}")
 
-    # Password strength checker
     pwd = st.text_input("Check Password Strength", type="password")
 
     if st.button("Analyze"):
         st.write("ML:", predict_password(pwd))
 
-    # Change password
     st.subheader("🔄 Change Password")
 
     old_pass = st.text_input("Old Password", type="password")
@@ -141,8 +148,7 @@ def user_dashboard():
 
             if valid == "Valid":
                 data["users"][user]["password"] = new_pass
-                with open("users.json", "w") as f:
-                    json.dump(data, f)
+                save_data()
                 st.success("Password updated")
             else:
                 st.error(valid)
@@ -158,17 +164,13 @@ def user_dashboard():
 # ======================
 def admin_dashboard():
     st.title("🛠️ Admin Dashboard")
-
     st.write(f"Welcome Admin: {st.session_state.username}")
 
-    # Show all users
     for user, info in data["users"].items():
         st.write(f"👤 {user}")
-        st.write(f"🔐 Password: {info['password']}")
-        st.write(f"📧 Email: {info['email']}")
+        st.write(f"📧 {info['email']}")
         st.write("---")
 
-    # Change admin password
     st.subheader("🔄 Change Admin Password")
 
     old_pass = st.text_input("Old Password", type="password")
@@ -182,8 +184,7 @@ def admin_dashboard():
 
             if valid == "Valid":
                 data["admin"][admin]["password"] = new_pass
-                with open("users.json", "w") as f:
-                    json.dump(data, f)
+                save_data()
                 st.success("Admin password updated")
             else:
                 st.error(valid)
@@ -194,7 +195,9 @@ def admin_dashboard():
         st.session_state.logged_in = False
         st.session_state.page = "login"
 
-# SIGN UP PAGE
+# ======================
+# SIGNUP PAGE
+# ======================
 def signup_page():
     st.title("🆕 Create Account")
 
@@ -203,14 +206,12 @@ def signup_page():
     password = st.text_input("Password", type="password")
     confirm = st.text_input("Confirm Password", type="password")
 
-    # 🔥 Real-time strength check
     if password:
         st.write("Strength:", predict_password(password))
 
     if password != confirm:
         st.error("Passwords do not match")
 
-    # SEND OTP
     if st.button("Send OTP"):
         if username in data["users"]:
             st.error("User already exists")
@@ -224,18 +225,16 @@ def signup_page():
             }
 
             if send_otp_email(email, otp):
-                st.success("OTP sent to your email")
+                st.success("OTP sent")
             else:
                 st.error("Failed to send OTP")
 
-    # VERIFY OTP
     otp_input = st.text_input("Enter OTP")
 
     if st.button("Verify & Create Account"):
         if otp_input == st.session_state.get("signup_otp"):
             user = st.session_state.temp_user
 
-            # Validate password
             valid = validate_password(user["password"])
 
             if valid == "Valid":
@@ -244,10 +243,8 @@ def signup_page():
                     "email": user["email"]
                 }
 
-                with open("users.json", "w") as f:
-                    json.dump(data, f)
-
-                st.success("Account created successfully 🎉")
+                save_data()
+                st.success("Account created 🎉")
             else:
                 st.error(valid)
         else:
@@ -255,7 +252,6 @@ def signup_page():
 
     if st.button("Back to Login"):
         st.session_state.page = "login"
-
 
 # ======================
 # ROUTING
