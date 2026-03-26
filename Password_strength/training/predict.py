@@ -1,15 +1,23 @@
 import pickle
 import os
 
-# Get current file path
-base_path = os.path.dirname(__file__)
+# Get absolute path of current file (predict.py)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Go to parent folder (Password_strength)
-parent_path = os.path.abspath(os.path.join(base_path, ".."))
+# Go one level up (to Password_strength folder)
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
 
-# Load model correctly
-model = pickle.load(open(os.path.join(parent_path, "model.pkl"), "rb"))
-vectorizer = pickle.load(open(os.path.join(parent_path, "vectorizer.pkl"), "rb"))
+# Correct file paths
+model_path = os.path.join(ROOT_DIR, "model.pkl")
+vectorizer_path = os.path.join(ROOT_DIR, "vectorizer.pkl")
+
+# Load files safely
+with open(model_path, "rb") as f:
+    model = pickle.load(f)
+
+with open(vectorizer_path, "rb") as f:
+    vectorizer = pickle.load(f)
+
 
 def predict_password(password):
     vec = vectorizer.transform([password])
